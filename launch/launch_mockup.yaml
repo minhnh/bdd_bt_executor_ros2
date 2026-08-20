@@ -1,0 +1,43 @@
+%YAML 1.2
+---
+launch:
+  - arg:
+      name: "ns"
+      default: "bdd"
+  - arg:
+      name: "coordinator_config"
+      default: "$(find-pkg-share bdd_exec_ros2)/config/bdd_server_only_configs.yaml"
+  - arg:
+      name: "graph_models"
+      default: "$(find-pkg-share bdd_exec_ros2)/models/pickplace-models-robbdd-json.yaml"
+  - arg:
+      name: "tree_xml"
+      default: "$(find-pkg-share bdd_bt_executor_ros2)/behavior_trees/mock_pick_place.xml"
+  - arg:
+      name: "event_topic"
+      default: "/bdd/events"
+  - node:
+      pkg: "bdd_bt_executor_ros2"
+      exec: "bdd_bt_executor"
+      namespace: "$(var ns)"
+      name: "bt_executor"
+      param:
+        - name: "tree_xml"
+          value: "$(var tree_xml)"
+        - name: "bhv_server_name"
+          value: "bhv_server"
+        - name: "event_topic"
+          value: "$(var event_topic)"
+  - node:
+      pkg: "bdd_exec_ros2"
+      exec: "bdd_coordination_node"
+      namespace: "$(var ns)"
+      name: "test_coordinator"
+      param:
+        - from: "$(var coordinator_config)"
+        - name: "graph_models"
+          value: "$(var graph_models)"
+        - name: "bhv_server_name"
+          value: "bhv_server"
+        - name: "event_topic"
+          value: "$(var event_topic)"

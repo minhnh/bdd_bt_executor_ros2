@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4" main_tree_to_execute="Main">
+  <BehaviorTree ID="Main">
+    <Sequence>
+      <PublishBddEvent iri="https://secorolab.github.io/models/acceptance-criteria/bdd/templates/evt-pick-start"/>
+      <MockTimedAction duration="0.5" heartbeat_duration="0.1" message="Mock picking"/>
+      <PublishBddEvent iri="https://secorolab.github.io/models/acceptance-criteria/bdd/templates/evt-pick-end"/>
+      <PublishBddEvent iri="https://secorolab.github.io/models/acceptance-criteria/bdd/templates/evt-place-start"/>
+      <MockTimedAction duration="0.5" heartbeat_duration="0.1" message="Mock placing"/>
+      <PublishBddEvent iri="https://secorolab.github.io/models/acceptance-criteria/bdd/templates/evt-place-end"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

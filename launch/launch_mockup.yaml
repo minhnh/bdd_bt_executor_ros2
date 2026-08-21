@@ -18,7 +18,7 @@ launch:
       default: "/bdd/events"
   - node:
       pkg: "bdd_bt_executor_ros2"
-      exec: "bdd_bt_executor"
+      exec: "bdd_bt_action_server"
       namespace: "$(var ns)"
       name: "bt_executor"
       param:

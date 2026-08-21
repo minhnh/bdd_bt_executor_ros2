@@ -33,7 +33,7 @@
 namespace bdd_bt_executor_ros2 {
 
 BddBtExecutor::BddBtExecutor(const rclcpp::NodeOptions &options)
-  : rclcpp::Node("bdd_bt_executor", options), tick_rate_hz_(30)
+  : rclcpp::Node("bdd_bt_action_server", options), tick_rate_hz_(30)
 {
     tree_xml_              = declare_parameter<std::string>("tree_xml", "");
     tick_rate_hz_          = declare_parameter<int>("tick_rate_hz", 30);

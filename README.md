@@ -3,7 +3,7 @@
 A reusable ROS 2 `bdd_ros2_interfaces/action/Behaviour` server backed by
 [BehaviorTree.CPP](https://www.behaviortree.dev/).
 
-The package provides the `bdd_bt_executor` executable and two generic tree nodes:
+The package provides the `bdd_bt_action_server` executable and two generic tree nodes:
 
 - `PublishBddEvent` publishes the current scenario context on the configured event topic.
 - `MockTimedAction` is a timed diagnostic action for integration tests and tree debugging.
@@ -11,7 +11,7 @@ The package provides the `bdd_bt_executor` executable and two generic tree nodes
 ## Run
 
 ```sh
-ros2 run bdd_bt_executor_ros2 bdd_bt_executor --ros-args \
+ros2 run bdd_bt_executor_ros2 bdd_bt_action_server --ros-args \
   -p tree_xml:=/absolute/path/to/tree.xml \
   -p bhv_server_name:=bhv_server \
   -p event_topic:=/bdd/events

@@ -22,14 +22,14 @@ ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   rclcpp_action)
 
-add_executable(bdd_bt_executor src/main.cpp)
-target_link_libraries(bdd_bt_executor ${PROJECT_NAME})
+add_executable(bdd_bt_action_server src/main.cpp)
+target_link_libraries(bdd_bt_action_server ${PROJECT_NAME})
 
-install(TARGETS ${PROJECT_NAME} bdd_bt_executor
+install(TARGETS ${PROJECT_NAME}
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION lib/${PROJECT_NAME})
+  LIBRARY DESTINATION lib)
+install(TARGETS bdd_bt_action_server DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY behavior_trees launch DESTINATION share/${PROJECT_NAME})
 

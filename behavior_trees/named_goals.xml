@@ -1,0 +1,8 @@
+<root BTCPP_format="4" main_tree_to_execute="NamedGoals">
+  <BehaviorTree ID="NamedGoals">
+    <Sequence>
+      <MoveGroupAction name="extended" group="panda_arm" named_target="extended" timeout="60"/>
+      <MoveGroupAction name="ready" group="panda_arm" named_target="ready" timeout="60"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

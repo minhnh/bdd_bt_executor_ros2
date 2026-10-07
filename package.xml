@@ -12,7 +12,11 @@
   <depend>bdd_ros2_interfaces</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
+  <depend>moveit_msgs</depend>
+  <depend>control_msgs</depend>
+  <depend>tinyxml2_vendor</depend>
   <exec_depend>bdd_exec_ros2</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>

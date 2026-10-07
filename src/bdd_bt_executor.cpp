@@ -28,6 +28,7 @@
 #include <bdd_ros2_interfaces/msg/trinary.hpp>
 
 #include "bdd_bt_executor_ros2/nodes/mock_timed_action.hpp"
+#include "bdd_bt_executor_ros2/nodes/motion_actions.hpp"
 #include "bdd_bt_executor_ros2/nodes/publish_bdd_event.hpp"
 
 namespace bdd_bt_executor_ros2 {
@@ -35,6 +36,7 @@ namespace bdd_bt_executor_ros2 {
 BddBtExecutor::BddBtExecutor(const rclcpp::NodeOptions &options)
   : rclcpp::Node("bdd_bt_action_server", options), tick_rate_hz_(30)
 {
+    declare_parameter<std::string>("robot_description_semantic", "");
     tree_xml_              = declare_parameter<std::string>("tree_xml", "");
     tick_rate_hz_          = declare_parameter<int>("tick_rate_hz", 30);
     const auto server_name = declare_parameter<std::string>("bhv_server_name", "bhv_server");
@@ -109,9 +111,21 @@ void BddBtExecutor::execute_goal(const std::shared_ptr<GoalHandle> &goal_handle)
             const std::string &name, const BT::NodeConfig &config
           ) { return std::make_unique<PublishBddEvent>(name, config, node, publisher, context_id); }
         );
+        factory.registerBuilder<MoveGroupAction>(
+          "MoveGroupAction", [node](const std::string &name, const BT::NodeConfig &config) {
+              return std::make_unique<MoveGroupAction>(name, config, node);
+          }
+        );
+        factory.registerBuilder<GripperCommandAction>(
+          "GripperCommandAction", [node](const std::string &name, const BT::NodeConfig &config) {
+              return std::make_unique<GripperCommandAction>(name, config, node);
+          }
+        );
         if (register_nodes_) { register_nodes_(factory, node); }
 
-        auto                tree = factory.createTreeFromFile(tree_xml_);
+        auto blackboard = BT::Blackboard::create();
+        blackboard->set("behaviour_goal", goal_handle->get_goal());
+        auto                tree = factory.createTreeFromFile(tree_xml_, blackboard);
         BT::Groot2Publisher groot_publisher(tree);
         const auto          tick_period =
           std::chrono::milliseconds(std::max(1, 1000 / std::max(1, tick_rate_hz_)));
@@ -119,14 +133,24 @@ void BddBtExecutor::execute_goal(const std::shared_ptr<GoalHandle> &goal_handle)
         while (rclcpp::ok()) {
             if (goal_handle->is_canceling()) {
                 tree.haltTree();
+                feedback->status =
+                  "Behaviour canceled; child cancellation requested; physical stop unconfirmed";
+                goal_handle->publish_feedback(feedback);
                 result->result =
                   make_result(goal_handle, bdd_ros2_interfaces::msg::Trinary::UNKNOWN);
                 goal_handle->canceled(result);
                 return;
             }
 
+            blackboard->unset("behaviour_status");
             const auto status = tree.tickOnce();
             feedback->status  = std::string("tree status: ") + BT::toStr(status, true);
+            std::string application_status;
+            if (
+              blackboard->get("behaviour_status", application_status) && !application_status.empty()
+            ) {
+                feedback->status = application_status;
+            }
             goal_handle->publish_feedback(feedback);
 
             if (status == BT::NodeStatus::SUCCESS) {

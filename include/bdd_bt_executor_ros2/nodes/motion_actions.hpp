@@ -97,6 +97,7 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
         }
         return true;
     }
+
     bool readNamedGoal(Action::Goal &goal, std::string &error)
     {
         std::string group, target, srdf;
@@ -182,13 +183,16 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
         goal.planning_options.planning_scene_diff.robot_state.is_diff = true;
         return true;
     }
+
     void writeFeedback(const Action::Feedback &feedback) override
     { setOutput("feedback_state", feedback.state); }
+
     bool writeResult(const Action::Result &result) override
     {
         setOutput("error_code", result.error_code.val);
         return result.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
     }
+
     std::string feedbackMessage(const Action::Feedback &feedback) override
     { return feedback.state; }
 };
@@ -238,8 +242,10 @@ class GripperCommandAction : public RosAction<control_msgs::action::GripperComma
         }
         return true;
     }
+
     void writeFeedback(const Action::Feedback &feedback) override
     { setOutput("result_position", feedback.position); }
+
     bool writeResult(const Action::Result &result) override
     {
         setOutput("result_position", result.position);
@@ -247,6 +253,7 @@ class GripperCommandAction : public RosAction<control_msgs::action::GripperComma
         setOutput("stalled", result.stalled);
         return true; // Command completion; physical grasp is checked by observations.
     }
+
     std::string feedbackMessage(const Action::Feedback &feedback) override
     { return "gripper position " + std::to_string(feedback.position); }
 };

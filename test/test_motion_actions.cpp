@@ -581,3 +581,41 @@ TEST_F(MotionActionsTest, NamedTargetResolvesAndRejectsInvalidInputs)
     }
     EXPECT_EQ(server.size(), 1);
 }
+
+TEST_F(MotionActionsTest, NamedGoalsExampleMovesThenClosesThenReturnsThenOpens)
+{
+    client_node->declare_parameter<std::string>(
+      "robot_description_semantic",
+      "<robot name='panda'><group_state group='panda_arm' name='extended'>"
+      "<joint name='panda_joint1' value='0'/></group_state>"
+      "<group_state group='panda_arm' name='ready'>"
+      "<joint name='panda_joint1' value='0.5'/></group_state></robot>"
+    );
+    FakeServer<Move>    arm(server_node, "/move_action");
+    FakeServer<Gripper> gripper(server_node, "/panda_hand_controller/gripper_cmd");
+    auto                t          = factory.createTreeFromFile(NAMED_GOALS_XML);
+    auto                tick_until = [&](const auto &predicate) {
+        return wait([&]() {
+            t.tickOnce();
+            return predicate();
+        });
+    };
+    ASSERT_TRUE(tick_until([&]() { return arm.size() == 1; }));
+    EXPECT_EQ(arm.handle(0)->get_goal()->request.goal_constraints.front().name, "extended");
+    EXPECT_EQ(gripper.size(), 0u);
+    auto arm_result            = std::make_shared<Move::Result>();
+    arm_result->error_code.val = moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
+    arm.handle(0)->succeed(arm_result);
+    ASSERT_TRUE(tick_until([&]() { return gripper.size() == 1; }));
+    EXPECT_DOUBLE_EQ(gripper.handle(0)->get_goal()->command.position, 0.0);
+    EXPECT_EQ(arm.size(), 1u);
+    gripper.handle(0)->succeed(std::make_shared<Gripper::Result>());
+    ASSERT_TRUE(tick_until([&]() { return arm.size() == 2; }));
+    EXPECT_EQ(arm.handle(1)->get_goal()->request.goal_constraints.front().name, "ready");
+    EXPECT_EQ(gripper.size(), 1u);
+    arm.handle(1)->succeed(arm_result);
+    ASSERT_TRUE(tick_until([&]() { return gripper.size() == 2; }));
+    EXPECT_DOUBLE_EQ(gripper.handle(1)->get_goal()->command.position, 0.04);
+    gripper.handle(1)->succeed(std::make_shared<Gripper::Result>());
+    EXPECT_EQ(finish(t), BT::NodeStatus::SUCCESS);
+}

@@ -28,6 +28,7 @@
 #include <bdd_ros2_interfaces/msg/trinary.hpp>
 
 #include "bdd_bt_executor_ros2/nodes/mock_timed_action.hpp"
+#include "bdd_bt_executor_ros2/nodes/get_entity_pose.hpp"
 #include "bdd_bt_executor_ros2/nodes/motion_actions.hpp"
 #include "bdd_bt_executor_ros2/nodes/publish_bdd_event.hpp"
 
@@ -119,6 +120,11 @@ void BddBtExecutor::execute_goal(const std::shared_ptr<GoalHandle> &goal_handle)
         factory.registerBuilder<GripperCommandAction>(
           "GripperCommandAction", [node](const std::string &name, const BT::NodeConfig &config) {
               return std::make_unique<GripperCommandAction>(name, config, node);
+          }
+        );
+        factory.registerBuilder<GetEntityPose>(
+          "GetEntityPose", [node](const std::string &name, const BT::NodeConfig &config) {
+              return std::make_unique<GetEntityPose>(name, config, node);
           }
         );
         if (register_nodes_) { register_nodes_(factory, node); }

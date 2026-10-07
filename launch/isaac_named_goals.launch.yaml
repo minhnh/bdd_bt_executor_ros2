@@ -1,0 +1,33 @@
+%YAML 1.2
+---
+launch:
+  - arg:
+      name: start_moveit
+      default: 'false'
+  - arg:
+      name: srdf
+      default: '$(find-pkg-share moveit_resources_panda_moveit_config)/config/panda.srdf'
+  - arg:
+      name: tree_xml
+      default: '$(find-pkg-share bdd_bt_executor_ros2)/behavior_trees/named_goals.xml'
+  - arg:
+      name: behaviour_action
+      default: '/bdd/named_goals'
+  - include:
+      if: '$(var start_moveit)'
+      file: '$(find-pkg-share isaac_moveit)/launch/isaac_moveit.launch.xml'
+  - node:
+      pkg: bdd_bt_executor_ros2
+      exec: bdd_bt_action_server
+      name: named_goals_bt_server
+      output: screen
+      param:
+        - name: use_sim_time
+          value: true
+        - name: bhv_server_name
+          value: '$(var behaviour_action)'
+        - name: tree_xml
+          value: '$(var tree_xml)'
+        - name: robot_description_semantic
+          value: '$(file-content $(var srdf))'
+          type: str

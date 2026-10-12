@@ -32,6 +32,7 @@
 #include "bdd_bt_executor_ros2/nodes/apply_planning_scene.hpp"
 #include "bdd_bt_executor_ros2/nodes/build_planning_scene.hpp"
 #include "bdd_bt_executor_ros2/nodes/planning_scene_objects.hpp"
+#include "bdd_bt_executor_ros2/nodes/resolve_behaviour_parameters.hpp"
 #include "bdd_bt_executor_ros2/nodes/motion_actions.hpp"
 #include "bdd_bt_executor_ros2/nodes/publish_bdd_event.hpp"
 
@@ -135,6 +136,7 @@ void BddBtExecutor::execute_goal(const std::shared_ptr<GoalHandle> &goal_handle)
               return std::make_unique<ApplyPlanningScene>(name, config, node);
           }
         );
+        factory.registerNodeType<ResolveBehaviourParameters>("ResolveBehaviourParameters");
         factory.registerBuilder<GetEntityPoses>(
           "GetEntityPoses", [node](const std::string &name, const BT::NodeConfig &config) {
               return std::make_unique<GetEntityPoses>(name, config, node);

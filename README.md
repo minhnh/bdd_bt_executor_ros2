@@ -12,6 +12,7 @@ The package provides the `bdd_bt_action_server` executable and these tree nodes:
 - `ApplyPlanningScene` forwards a `moveit_msgs/PlanningScene` message to MoveIt and waits for acknowledgement.
 - `ClearPlanningSceneForUris`, `AttachObjectByUri`, and `DetachObjectByUri` construct
   URI-based cleanup, attachment, and detachment scene diffs.
+- `ResolveBehaviourParameters` maps incoming URI-valued goal parameters to configured tree roles.
 - `GetEntityPoses` collects URI-to-pose mappings; `BuildPlanningScene` builds primitive collision geometry.
 - `GetEntityPose` queries an entity pose through
   [ROS simulation interfaces](https://github.com/ros-simulation/simulation_interfaces).

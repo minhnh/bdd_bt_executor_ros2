@@ -10,8 +10,10 @@ valid after `SUCCESS`. Timeouts use steady time; keep ROS callbacks spinning.
 <!-- mtoc-start -->
 
 1. [Entity catalogue](#entity-catalogue)
-1. [PublishBddEvent](#publishbddevent)
 1. [MockTimedAction](#mocktimedaction)
+1. [BDD Nodes](#bdd-nodes)
+    1. [ResolveBehaviourParameters](#resolvebehaviourparameters)
+    1. [PublishBddEvent](#publishbddevent)
 1. [Simulation interfaces](#simulation-interfaces)
     1. [GetEntityPose](#getentitypose)
     1. [GetEntityPoses](#getentityposes)
@@ -51,17 +53,6 @@ integration, see [robbdd_tutorials](https://github.com/minhnh/robbdd_tutorials):
 - Local `position` defaults to zero; `orientation` is a unit quaternion `[x,y,z,w]`,
   default identity. Both are relative to the entity pose.
 
-## PublishBddEvent
-
-Publishes a BDD event on the executor's event topic, with the current scenario
-UUID and timestamp.
-
-```xml
-<PublishBddEvent iri="{event_iri}"/>
-```
-
-- Required: nonempty `iri` from the BDD model.
-
 ## MockTimedAction
 
 Runs a timed logging action for testing a tree without behaviour integration.
@@ -72,6 +63,44 @@ Runs a timed logging action for testing a tree without behaviour integration.
 
 - Required: `duration` >= 0, `heartbeat_duration` > 0 (seconds), and `message`.
 - Logs at the heartbeat interval; succeeds after the duration. No output ports.
+
+## BDD Nodes
+
+### ResolveBehaviourParameters
+
+Resolve URI-valued Behaviour goal parameters into tree roles. Each role is written
+as a string blackboard entry on success; `uri_bindings` contains the complete map.
+
+```yaml
+variable_bindings:
+  object_uri: "https://example.org/var-target-object"
+  pick_workspace_uri: "https://example.org/var-pick-workspace"
+```
+
+```xml
+<ResolveBehaviourParameters config_file="{config_file}" uri_bindings="{uri_bindings}"/>
+```
+
+- Requires the executor's `behaviour_goal` blackboard value and `config_file`.
+- Each configured variable must have exactly one nonempty URI value in the goal.
+  Duplicate variables or binding URIs fail. Additional URI-valued parameters are allowed.
+- Aliases must be nonempty; `behaviour_goal` and `behaviour_status` are reserved.
+  Choose aliases that do not overwrite other tree values.
+- Optional outputs: `uri_bindings` (`UriBindings`), `status_message`.
+- Behaviour `configs` are unsupported.
+- Does not check an entity catalogue or select robot configuration. Later nodes
+  validate the resolved entities for their operation.
+
+### PublishBddEvent
+
+Publishes a BDD event on the executor's event topic, with the current scenario
+UUID and timestamp.
+
+```xml
+<PublishBddEvent iri="{event_iri}"/>
+```
+
+- Required: nonempty `iri` from the BDD model.
 
 ## Simulation interfaces
 

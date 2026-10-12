@@ -9,6 +9,10 @@ The package provides the `bdd_bt_action_server` executable and these tree nodes:
 - `MockTimedAction` is a timed diagnostic action for integration tests and tree debugging.
 - `MoveGroupAction` sends a native MoveIt goal or resolves an SRDF named target.
 - `GripperCommandAction` sends a position/effort command to a gripper action server.
+- `ApplyPlanningScene` forwards a `moveit_msgs/PlanningScene` message to MoveIt and waits for acknowledgement.
+- `ClearPlanningSceneForUris`, `AttachObjectByUri`, and `DetachObjectByUri` construct
+  URI-based cleanup, attachment, and detachment scene diffs.
+- `GetEntityPoses` collects URI-to-pose mappings; `BuildPlanningScene` builds primitive collision geometry.
 - `GetEntityPose` queries an entity pose through
   [ROS simulation interfaces](https://github.com/ros-simulation/simulation_interfaces).
 
@@ -23,10 +27,6 @@ The package provides the `bdd_bt_action_server` executable and these tree nodes:
     1. [Isaac Sim named-goals smoke test](#isaac-sim-named-goals-smoke-test)
     1. [Automated node tests](#automated-node-tests)
 1. [BT node reference](#bt-node-reference)
-    1. [BDD event publication](#bdd-event-publication)
-    1. [Timed mock actions](#timed-mock-actions)
-    1. [MoveIt and gripper actions](#moveit-and-gripper-actions)
-    1. [Entity pose queries](#entity-pose-queries)
 
 <!-- mtoc-end -->
 
@@ -176,129 +176,11 @@ colcon test-result --verbose
   client reuse, and SRDF named-target validation.
 - Fake entity-state services check pose/header preservation, errors, timeouts,
   and late responses after halt/restart or tree destruction.
+- Fake planning-scene services check native-message forwarding, acknowledgement,
+  endpoint changes, timeouts, and late replies after halt/restart or destruction.
 - Executor checks cover Behaviour feedback, scenario UUIDs, and trinary results.
-
 
 ## BT node reference
 
-### BDD event publication
-
-```xml
-<PublishBddEvent iri="https://secorolab.github.io/models/acceptance-criteria/bdd/templates/evt-pick-start"/>
-```
-
-- `iri` is required and must be nonempty; use the exact event IRI from the BDD model.
-- Publishes a `bdd_ros2_interfaces/msg/Event` on the executor's `event_topic`.
-- Includes the current Behaviour goal's scenario UUID and the ROS clock timestamp.
-- Returns `SUCCESS` after publishing; a missing/empty IRI returns `FAILURE`.
-- Publication does not wait for coordinator acknowledgment.
-
-### Timed mock actions
-
-```xml
-<MockTimedAction duration="0.5" heartbeat_duration="0.1" message="Mock picking"/>
-```
-
-- All three inputs are required: `duration` in seconds (nonnegative),
-  `heartbeat_duration` in seconds (positive), and `message` as a string.
-- Returns `RUNNING` until the steady-clock duration expires, then `SUCCESS`.
-  Zero duration succeeds immediately.
-- Logs `message` at the heartbeat interval while running; it has no output ports.
-- Halt ends the wait without additional work; it sends no robot commands.
-- Used by [behavior_trees/mock_pick_place.xml](behavior_trees/mock_pick_place.xml)
-  to exercise event ordering and coordinator integration without motion servers.
-
-### MoveIt and gripper actions
-
-```xml
-<MoveGroupAction action_name="{move_action_name}"
-                 goal="{motion_goal}" feedback_state="{move_state}"
-                 error_code="{move_code}" status_message="{move_status}"/>
-<GripperCommandAction action_name="{gripper_action_name}"
-                      position="0.04" max_effort="5"
-                      result_position="{finger_position}"
-                      reached_goal="{reached}" stalled="{stalled}"/>
-```
-
-Alternatively, resolve a named target from the executor's `robot_description_semantic` parameter:
-
-```xml
-<MoveGroupAction group="arm" named_target="ready" timeout="60"/>
-```
-
-Goal inputs:
-
-- **Native goal:** `motion_goal` must be a `moveit_msgs::action::MoveGroup::Goal`
-  prepared by an application node. It requires a group, goal constraints, positive
-  planning time, and finite scaling factors in `[0, 1]` (zero preserves MoveIt defaults).
-- **Named target:** specify `group` + `named_target` and supply SRDF XML through
-  the executor's `robot_description_semantic` parameter. Other goal forms and
-  non-motion nodes do not require SRDF on the executor.
-- **Exclusive inputs:** combining `goal` with named-target inputs is rejected.
-- **Named-target validation:** unknown/empty targets, duplicate joints, malformed
-  XML, and invalid positions fail before sending a goal. Only scalar joint
-  positions are supported; parsing uses the classic dot-decimal locale.
-- **Named-target execution:** starts from MoveIt's current robot state and executes
-  the planned trajectory. Options are `planning_time` (5 seconds),
-  `velocity_scaling` (0.2), and `acceleration_scaling` (0.2).
-- **MoveGroup success:** requires both ROS action success and a successful MoveIt error code.
-- **Gripper success:** reports command completion; reached/stalled outputs do not certify physical grasp.
-
-Endpoints and timing:
-
-- `action_name` defaults to `/move_action` for MoveGroup and `/gripper_cmd` for
-  the gripper. Override through application configuration and blackboard entries
-  when endpoints differ. Empty endpoints fail.
-- `timeout` defaults to 30 seconds; `cancel_timeout` defaults to 2 seconds.
-- Timeouts use steady time even with a paused simulation clock. Ticks and halt
-  never wait for ROS futures; unavailable servers are polled until the timeout.
-- Action feedback updates output ports and Behaviour status on ticks.
-- Named and native goals use the same endpoints, timing, feedback, and cancellation handling.
-
-Client lifetime:
-
-- Each BT node creates a client lazily on its first valid invocation and reuses
-  it while `action_name` stays the same.
-- Changing the name replaces that node's retained client; there is no shared client cache.
-- Callback state is separate for each invocation. Pending cancellation retains
-  an old client only for the bounded cancellation interval.
-- Client retention lasts for the BT node's lifetime. The executor creates a new
-  tree for each Behaviour goal; unused motion nodes create no clients.
-
-Cancellation:
-
-- Halt/timeout requests cancellation, including after delayed goal acceptance.
-- Keep the ROS executor spinning for `cancel_timeout` after tree destruction to
-  deliver late callbacks. After that interval, late callbacks are discarded.
-- Cancellation failures and expired confirmation windows are logged as
-  **stop unconfirmed**. Behaviour cancellation does not prove the controller stopped.
-- Verify controller stoppage/reset before another run.
-
-
-### Entity pose queries
-
-```xml
-<GetEntityPose entity_id="{simulator_entity_id}" service_namespace="/"
-               timeout="5" pose="{entity_pose}" status_message="{pose_status}"/>
-```
-
-- `entity_id` is the simulator's entity name/ID, such as a prim path. URI mappings
-  belong to the application; the node accepts simulator IDs only.
-- `service_namespace` defaults to `/`, selecting `/get_entity_state` of type
-  `simulation_interfaces/srv/GetEntityState`. An empty namespace uses the node's
-  namespace; relative and absolute namespaces are supported.
-- `timeout` defaults to 5 seconds and covers discovery and the request together,
-  using steady time even if simulation time is paused.
-- Discovery and response polling are asynchronous; each invocation submits once.
-- `pose` is a native `geometry_msgs::msg::PoseStamped` blackboard value, valid only
-  after success. The service's header and pose are copied without modification.
-- An empty response frame means world according to the interface; it remains
-  empty in the output. Zero/unspecified stamps are preserved, not replaced with
-  the current time. The query does not establish observation freshness.
-- Empty IDs, invalid namespaces/timeouts, unavailable services, service errors,
-  and expired requests fail with `status_message` and Behaviour feedback.
-- Halt, timeout, and node destruction remove the local pending request. Service
-  execution cannot be canceled; late replies are discarded and cannot affect a
-  later invocation. The client is reused while the service endpoint stays the same.
-- Fake-service tests cover pose/header preservation, errors, timeouts, and late
-  responses after halt/restart or tree destruction; no simulator is needed.
+See [docs/bt_nodes.md](docs/bt_nodes.md) for node ports, examples, timing,
+client lifetime, and cancellation behavior.

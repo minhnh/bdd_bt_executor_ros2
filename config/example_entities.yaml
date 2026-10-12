@@ -1,0 +1,18 @@
+# Generic catalogue example. Replace simulator IDs and geometry for your scene.
+entities:
+  - uri: "urn:objects:cube"
+    id: "/objects/cube"  # Required for pose queries; optional for scene construction.
+    # collision_id is optional and defaults to the URI.
+    shapes:
+      - type: box
+        dimensions: [0.05, 0.05, 0.05]
+        position: [0.0, 0.0, 0.0]
+        orientation: [0.0, 0.0, 0.0, 1.0]  # Local quaternion [x,y,z,w].
+  - uri: "urn:objects:table"
+    id: "/objects/table"
+    collision_id: "example/table"
+    shapes:
+      - type: box
+        dimensions: [1.0, 1.0, 0.05]
+        position: [0.0, 0.0, -0.025]  # This example assumes a tabletop-surface origin.
+        # Omitted orientation defaults to identity.

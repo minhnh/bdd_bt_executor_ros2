@@ -221,3 +221,27 @@ TEST_F(EntityPoseTest, InvalidInputsFailBeforeRequest)
     }
     EXPECT_TRUE(headers.empty());
 }
+
+TEST_F(EntityPoseTest, OverrideChangesOnlyFrameAndIsReadOnEachInvocation)
+{
+    serve();
+    auto t =
+      tree("entity_id='{entity}' service_namespace='/pose_test/' override_frame_id='{frame}'");
+    for (const auto &frame : { std::string("world"), std::string() }) {
+        t.haltTree();
+        t.rootBlackboard()->set("frame", frame);
+        const auto index = headers.size();
+        ASSERT_TRUE(wait([&] {
+            t.tickOnce();
+            return headers.size() == index + 1;
+        }));
+        respond(index);
+        EXPECT_EQ(finish(t), BT::NodeStatus::SUCCESS);
+        const auto pose = t.rootBlackboard()->get<geometry_msgs::msg::PoseStamped>("pose");
+        EXPECT_EQ(pose.header.frame_id, frame.empty() ? "simulation_world" : frame);
+        EXPECT_EQ(pose.header.stamp.sec, 42);
+        EXPECT_EQ(pose.header.stamp.nanosec, 123u);
+        EXPECT_DOUBLE_EQ(pose.pose.position.x, index + 1);
+        EXPECT_DOUBLE_EQ(pose.pose.orientation.w, 1);
+    }
+}

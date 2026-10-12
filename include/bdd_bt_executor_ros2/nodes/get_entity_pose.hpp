@@ -50,6 +50,9 @@ class GetEntityPose : public BT::StatefulActionNode
     {
         return {
             BT::InputPort<std::string>("entity_id"),
+            BT::InputPort<std::string>(
+              "override_frame_id", "", "Replace response frame without transforming coordinates"
+            ),
             BT::InputPort<std::string>("service_namespace", "/", "Simulation service namespace"),
             BT::InputPort<double>("timeout", 5.0, "Steady-clock timeout in seconds"),
             BT::OutputPort<geometry_msgs::msg::PoseStamped>("pose"),
@@ -67,7 +70,8 @@ class GetEntityPose : public BT::StatefulActionNode
             if (
               !getInput("entity_id", entity_) || entity_.empty()
               || !getInput("service_namespace", ns) || !getInput("timeout", timeout)
-              || !std::isfinite(timeout) || timeout <= 0.0
+              || !getInput("override_frame_id", override_frame_id_) || !std::isfinite(timeout)
+              || timeout <= 0.0
               || timeout >= std::chrono::duration<double>(Clock::time_point::max() - now).count()
             ) {
                 throw std::invalid_argument(
@@ -110,6 +114,7 @@ class GetEntityPose : public BT::StatefulActionNode
                 geometry_msgs::msg::PoseStamped pose;
                 pose.header = response->state.header;
                 pose.pose   = response->state.pose;
+                if (!override_frame_id_.empty()) { pose.header.frame_id = override_frame_id_; }
                 setOutput("pose", pose);
                 statusMessage("succeeded");
                 return BT::NodeStatus::SUCCESS;
@@ -167,7 +172,7 @@ class GetEntityPose : public BT::StatefulActionNode
     rclcpp::Client<Service>::SharedPtr        client_;
     std::future<Service::Response::SharedPtr> future_;
     std::optional<int64_t>                    request_id_;
-    std::string                               entity_, endpoint_;
+    std::string                               entity_, endpoint_, override_frame_id_;
     Clock::time_point                         deadline_;
 };
 

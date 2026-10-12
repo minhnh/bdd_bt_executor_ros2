@@ -29,6 +29,9 @@
 
 #include "bdd_bt_executor_ros2/nodes/mock_timed_action.hpp"
 #include "bdd_bt_executor_ros2/nodes/get_entity_pose.hpp"
+#include "bdd_bt_executor_ros2/nodes/apply_planning_scene.hpp"
+#include "bdd_bt_executor_ros2/nodes/build_planning_scene.hpp"
+#include "bdd_bt_executor_ros2/nodes/planning_scene_objects.hpp"
 #include "bdd_bt_executor_ros2/nodes/motion_actions.hpp"
 #include "bdd_bt_executor_ros2/nodes/publish_bdd_event.hpp"
 
@@ -127,6 +130,25 @@ void BddBtExecutor::execute_goal(const std::shared_ptr<GoalHandle> &goal_handle)
               return std::make_unique<GetEntityPose>(name, config, node);
           }
         );
+        factory.registerBuilder<ApplyPlanningScene>(
+          "ApplyPlanningScene", [node](const std::string &name, const BT::NodeConfig &config) {
+              return std::make_unique<ApplyPlanningScene>(name, config, node);
+          }
+        );
+        factory.registerBuilder<GetEntityPoses>(
+          "GetEntityPoses", [node](const std::string &name, const BT::NodeConfig &config) {
+              return std::make_unique<GetEntityPoses>(name, config, node);
+          }
+        );
+        factory.registerNodeType<BuildPlanningScene>("BuildPlanningScene");
+        factory.registerBuilder<ClearPlanningSceneForUris>(
+          "ClearPlanningSceneForUris",
+          [node](const std::string &name, const BT::NodeConfig &config) {
+              return std::make_unique<ClearPlanningSceneForUris>(name, config, node);
+          }
+        );
+        factory.registerNodeType<AttachObjectByUri>("AttachObjectByUri");
+        factory.registerNodeType<DetachObjectByUri>("DetachObjectByUri");
         if (register_nodes_) { register_nodes_(factory, node); }
 
         auto blackboard = BT::Blackboard::create();

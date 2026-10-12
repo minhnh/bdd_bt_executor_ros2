@@ -17,6 +17,9 @@ valid after `SUCCESS`. Timeouts use steady time; keep ROS callbacks spinning.
 1. [Simulation interfaces](#simulation-interfaces)
     1. [GetEntityPose](#getentitypose)
     1. [GetEntityPoses](#getentityposes)
+1. [Pose operations](#pose-operations)
+    1. [SelectEntityPose](#selectentitypose)
+    1. [OffsetPose](#offsetpose)
 1. [MoveIt Motion actions](#moveit-motion-actions)
     1. [MoveGroupAction](#movegroupaction)
     1. [GripperCommandAction](#grippercommandaction)
@@ -137,6 +140,44 @@ transforming them into the requested target frame.
 - Output: `poses` (`bdd_bt_executor_ros2::EntityPoses`, URI -> PoseStamped map);
   optional `status_message`. Queries sequentially and converts through TF; missing TF fails.
 
+## Pose operations
+
+These nodes prepare poses without requesting motion. They preserve the pose's
+frame and timestamp and require finite coordinates and unit quaternions.
+
+### SelectEntityPose
+
+Selects one pose from a URI-to-pose map, independently of its producer.
+
+```xml
+<SelectEntityPose poses="{poses}" object_uri="{object_uri}" pose="{object_pose}"/>
+```
+
+- Required: `poses` (`EntityPoses`), `object_uri` (string key).
+- Output: `pose` (`PoseStamped`); optional `status_message`.
+- Unknown URI or empty pose frame fails.
+
+### OffsetPose
+
+Applies a translation and relative rotation to a pose. An optional absolute
+orientation override supports a fixed tool orientation in the reference frame.
+
+```xml
+<OffsetPose pose="{object_pose}" position_offset="0;0;0.1" target_pose="{target}"/>
+<OffsetPose pose="{target}" position_offset="0;0;0.1" offset_frame="reference"
+    target_pose="{approach}"/>
+```
+
+- Required: `pose` (`PoseStamped`). Output: `target_pose`; optional `status_message`.
+- `position_offset="0;0;0"`: metres, `[x,y,z]`.
+- `orientation_offset="0;0;0;1"`: relative unit quaternion `[x,y,z,w]`.
+- `offset_frame="local"`: translation follows the input orientation and rotation
+  composes as `input * offset`. `reference` uses the header frame's axes and
+  composes as `offset * input`. No TF lookup occurs.
+- Optional `orientation`: absolute unit quaternion in the header frame, applied
+  before offsets. In local mode, it also determines the translation axes.
+- Vector ports accept native double vectors or semicolon-separated XML strings.
+
 ## MoveIt Motion actions
 
 These nodes send ROS action goals for motion or gripper control.
@@ -146,20 +187,26 @@ These nodes send ROS action goals for motion or gripper control.
 
 ### MoveGroupAction
 
-Sends a motion goal to MoveIt using either a native goal or a named robot
-configuration from the SRDF.
+Sends target constraints to MoveIt, which plans and executes using its current
+robot state and collision scene. Pose targets do not require an SRDF on the executor.
 
 ```xml
 <MoveGroupAction goal="{goal}" error_code="{code}" feedback_state="{state}"/>
 <MoveGroupAction group="arm" named_target="ready"/>
+<MoveGroupAction group="arm" target_pose="{target}" link_name="tool"/>
 ```
 
-- Required: native `moveit_msgs::action::MoveGroup::Goal` `goal`, OR
-  `group` + `named_target`. Named targets require the executor's SRDF parameter
-  `robot_description_semantic`; the two input forms cannot be combined.
+- Required: exactly one input mode:
+  - Native `moveit_msgs::action::MoveGroup::Goal` `goal`.
+  - `group` + `named_target` (requires `robot_description_semantic` on the executor).
+  - `group` + `target_pose` (`PoseStamped`) + `link_name` (the constrained robot link).
+- Pose targets require a nonempty frame and a finite pose with a unit quaternion.
+  MoveIt handles the target frame; the node does not transform or offset the pose.
+- Pose tolerances: `position_tolerance="0.005"` (sphere radius, metres),
+  `orientation_tolerance="0.05"` (per-axis radians), both finite and positive.
+- Named/pose planning options: `planning_time="5"`, `velocity_scaling="0.2"`,
+  `acceleration_scaling="0.2"`. Native goals retain their own options.
 - Optional: `action_name="/move_action"` and shared timing options.
-- Named-target options: `planning_time="5"`, `velocity_scaling="0.2"`,
-  `acceleration_scaling="0.2"`.
 - Outputs: `error_code`, `feedback_state`, `status_message`.
   Success requires ROS action success and a successful MoveIt error code.
 

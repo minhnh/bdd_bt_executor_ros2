@@ -26,6 +26,7 @@
 #include <moveit_msgs/action/move_group.hpp>
 
 #include "bdd_bt_executor_ros2/nodes/ros_action.hpp"
+#include "bdd_bt_executor_ros2/nodes/get_entity_poses.hpp"
 
 namespace bdd_bt_executor_ros2 {
 
@@ -42,24 +43,28 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
     {}
     static BT::PortsList providedPorts()
     {
-        return {
-            BT::InputPort<Action::Goal>("goal"),
-            BT::InputPort<std::string>("group"),
-            BT::InputPort<std::string>("named_target"),
-            BT::InputPort<double>("planning_time", 5.0, "Named target planning time"),
-            BT::InputPort<double>("velocity_scaling", 0.2, "Named target velocity scaling"),
-            BT::InputPort<double>("acceleration_scaling", 0.2, "Named target acceleration scaling"),
-            BT::InputPort<std::string>(
-              "action_name", "/move_action", "MoveGroup action server name"
-            ),
-            BT::InputPort<double>("timeout", 30.0, "Steady-clock timeout in seconds"),
-            BT::InputPort<double>(
-              "cancel_timeout", 2.0, "Callback retention after cancellation, seconds"
-            ),
-            BT::OutputPort<std::string>("feedback_state"),
-            BT::OutputPort<int>("error_code"),
-            BT::OutputPort<std::string>("status_message")
-        };
+        return { BT::InputPort<Action::Goal>("goal"),
+                 BT::InputPort<std::string>("group"),
+                 BT::InputPort<std::string>("named_target"),
+                 BT::InputPort<geometry_msgs::msg::PoseStamped>("target_pose"),
+                 BT::InputPort<std::string>("link_name"),
+                 BT::InputPort<double>("position_tolerance", 0.005, "Position tolerance in metres"),
+                 BT::InputPort<double>(
+                   "orientation_tolerance", 0.05, "Orientation tolerance in radians"
+                 ),
+                 BT::InputPort<double>("planning_time", 5.0, "Target planning time"),
+                 BT::InputPort<double>("velocity_scaling", 0.2, "Target velocity scaling"),
+                 BT::InputPort<double>("acceleration_scaling", 0.2, "Target acceleration scaling"),
+                 BT::InputPort<std::string>(
+                   "action_name", "/move_action", "MoveGroup action server name"
+                 ),
+                 BT::InputPort<double>("timeout", 30.0, "Steady-clock timeout in seconds"),
+                 BT::InputPort<double>(
+                   "cancel_timeout", 2.0, "Callback retention after cancellation, seconds"
+                 ),
+                 BT::OutputPort<std::string>("feedback_state"),
+                 BT::OutputPort<int>("error_code"),
+                 BT::OutputPort<std::string>("status_message") };
     }
 
   private:
@@ -68,16 +73,23 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
         setOutput("feedback_state", std::string());
         setOutput("error_code", 0);
         const bool native = config().input_ports.count("goal") != 0;
-        const bool named  = config().input_ports.count("group") != 0
-                            || config().input_ports.count("named_target") != 0;
-        if (native && named) {
-            error = "Specify either goal or group + named_target, not both";
+        const bool named  = config().input_ports.count("named_target") != 0;
+        const bool pose   = config().input_ports.count("target_pose") != 0;
+        if (
+          static_cast<int>(native) + static_cast<int>(named) + static_cast<int>(pose) != 1
+          || (native && config().input_ports.count("group"))
+        ) {
+            error =
+              "Specify exactly one of goal, group + named_target, or group + target_pose + "
+              "link_name";
             return false;
         }
         if (named) {
-            if (!readNamedGoal(goal, error)) { return false; }
+            if (!readNamedGoal(goal, error)) return false;
+        } else if (pose) {
+            if (!readPoseGoal(goal, error)) return false;
         } else if (!getInput("goal", goal)) {
-            error = "Provide a native goal or group + named_target";
+            error = "Invalid native goal";
             return false;
         }
         const auto &request = goal.request;
@@ -182,6 +194,66 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
         goal.planning_options.planning_scene_diff.is_diff             = true;
         goal.planning_options.planning_scene_diff.robot_state.is_diff = true;
         return true;
+    }
+
+    bool readPoseGoal(Action::Goal &goal, std::string &error)
+    {
+        try {
+            geometry_msgs::msg::PoseStamped target;
+            std::string                     group, link;
+            double                          position_tolerance, orientation_tolerance;
+            if (
+              !getInput("target_pose", target) || target.header.frame_id.empty()
+              || !getInput("group", group) || group.empty() || !getInput("link_name", link)
+              || link.empty() || !getInput("position_tolerance", position_tolerance)
+              || !getInput("orientation_tolerance", orientation_tolerance)
+              || !std::isfinite(position_tolerance) || position_tolerance <= 0
+              || !std::isfinite(orientation_tolerance) || orientation_tolerance <= 0
+            )
+                throw std::invalid_argument(
+                  "pose target requires a frame, group, link_name, and finite positive tolerances"
+                );
+            validatePose(target.pose);
+            goal                               = Action::Goal();
+            goal.request.group_name            = group;
+            goal.request.start_state.is_diff   = true;
+            goal.request.num_planning_attempts = 5;
+            if (
+              !getInput("planning_time", goal.request.allowed_planning_time)
+              || !getInput("velocity_scaling", goal.request.max_velocity_scaling_factor)
+              || !getInput("acceleration_scaling", goal.request.max_acceleration_scaling_factor)
+            )
+                throw std::invalid_argument("invalid pose target planning options");
+            moveit_msgs::msg::Constraints        constraints;
+            moveit_msgs::msg::PositionConstraint position;
+            position.header    = target.header;
+            position.link_name = link;
+            position.weight    = 1;
+            shape_msgs::msg::SolidPrimitive sphere;
+            sphere.type       = sphere.SPHERE;
+            sphere.dimensions = { position_tolerance };
+            position.constraint_region.primitives.push_back(sphere);
+            auto region          = target.pose;
+            region.orientation.x = region.orientation.y = region.orientation.z = 0;
+            region.orientation.w                                               = 1;
+            position.constraint_region.primitive_poses.push_back(region);
+            constraints.position_constraints.push_back(position);
+            moveit_msgs::msg::OrientationConstraint orientation;
+            orientation.header                      = target.header;
+            orientation.link_name                   = link;
+            orientation.orientation                 = target.pose.orientation;
+            orientation.weight                      = 1;
+            orientation.absolute_x_axis_tolerance   = orientation.absolute_y_axis_tolerance =
+              orientation.absolute_z_axis_tolerance = orientation_tolerance;
+            constraints.orientation_constraints.push_back(orientation);
+            goal.request.goal_constraints.push_back(constraints);
+            goal.planning_options.planning_scene_diff.is_diff             = true;
+            goal.planning_options.planning_scene_diff.robot_state.is_diff = true;
+            return true;
+        } catch (const std::exception &exception) {
+            error = exception.what();
+            return false;
+        }
     }
 
     void writeFeedback(const Action::Feedback &feedback) override

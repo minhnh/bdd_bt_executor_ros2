@@ -22,6 +22,7 @@
 #include <fstream>
 #include <functional>
 #include <mutex>
+#include <limits>
 #include <thread>
 #include <vector>
 
@@ -398,12 +399,13 @@ TEST_F(MotionActionsTest, BehaviourGoalAndFeedbackReachApplicationNodes)
     {
         std::ofstream xml(path);
         xml << "<root BTCPP_format=\"4\"><BehaviorTree ID=\"Test\"><Sequence><PrepareMove/>"
-               "<MoveGroupAction goal=\"{motion_goal}\" action_name=\"/test_move\"/>"
+               "<MoveGroupAction goal=\"{motion_goal}\" action_name=\"{move_endpoint}\"/>"
                "</Sequence></BehaviorTree></root>";
     }
     auto executor_node = std::make_shared<BddBtExecutor>(rclcpp::NodeOptions().parameter_overrides(
       { rclcpp::Parameter("tree_xml", path),
-        rclcpp::Parameter("bhv_server_name", "/test_behaviour") }
+        rclcpp::Parameter("bhv_server_name", "/test_behaviour"),
+        rclcpp::Parameter("tree_inputs", "move_endpoint: /test_move") }
     ));
     executor_node->set_node_registrar([](auto &f, const auto &) {
         f.template registerNodeType<PrepareMove>("PrepareMove");
@@ -618,4 +620,90 @@ TEST_F(MotionActionsTest, NamedGoalsExampleMovesThenClosesThenReturnsThenOpens)
     EXPECT_DOUBLE_EQ(gripper.handle(1)->get_goal()->command.position, 0.04);
     gripper.handle(1)->succeed(std::make_shared<Gripper::Result>());
     EXPECT_EQ(finish(t), BT::NodeStatus::SUCCESS);
+}
+
+TEST_F(MotionActionsTest, PoseTargetBuildsConstraintsAndRejectsInvalidOrMixedInputs)
+{
+    FakeServer<Move>                server(server_node, "/test_move");
+    auto                            bb = BT::Blackboard::create();
+    geometry_msgs::msg::PoseStamped pose;
+    pose.header.frame_id    = "world";
+    pose.header.stamp.sec   = 42;
+    pose.pose.position.x    = 0.3;
+    pose.pose.position.z    = 0.5;
+    pose.pose.orientation.x = 1;
+    pose.pose.orientation.w = 0;
+    bb->set("pose", pose);
+    auto t = tree(
+      "<MoveGroupAction group='arm' target_pose='{pose}' link_name='tool' "
+      "action_name='/test_move' position_tolerance='0.01' orientation_tolerance='0.1' "
+      "planning_time='3'/>",
+      bb
+    );
+    ASSERT_TRUE(wait([&]() {
+        t.tickOnce();
+        return server.size() == 1;
+    }));
+    const auto &goal = *server.handle()->get_goal();
+    EXPECT_EQ(goal.request.group_name, "arm");
+    EXPECT_TRUE(goal.request.start_state.is_diff);
+    EXPECT_DOUBLE_EQ(goal.request.allowed_planning_time, 3);
+    EXPECT_DOUBLE_EQ(goal.request.max_velocity_scaling_factor, 0.2);
+    EXPECT_FALSE(goal.planning_options.plan_only);
+    EXPECT_TRUE(goal.planning_options.planning_scene_diff.is_diff);
+    ASSERT_EQ(goal.request.goal_constraints.size(), 1u);
+    const auto &constraint = goal.request.goal_constraints.front();
+    ASSERT_EQ(constraint.position_constraints.size(), 1u);
+    const auto &position = constraint.position_constraints.front();
+    EXPECT_EQ(position.header, pose.header);
+    EXPECT_EQ(position.link_name, "tool");
+    EXPECT_DOUBLE_EQ(position.constraint_region.primitives.at(0).dimensions.at(0), 0.01);
+    EXPECT_EQ(position.constraint_region.primitive_poses.at(0).position, pose.pose.position);
+    ASSERT_EQ(constraint.orientation_constraints.size(), 1u);
+    EXPECT_EQ(constraint.orientation_constraints.front().orientation, pose.pose.orientation);
+    EXPECT_DOUBLE_EQ(constraint.orientation_constraints.front().absolute_z_axis_tolerance, 0.1);
+    auto result            = std::make_shared<Move::Result>();
+    result->error_code.val = moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
+    server.handle()->succeed(result);
+    EXPECT_EQ(finish(t), BT::NodeStatus::SUCCESS);
+    auto native = moveTree();
+    bb->set("goal", native.rootBlackboard()->get<Move::Goal>("goal"));
+    for (const auto &xml :
+         { "<MoveGroupAction group='arm' target_pose='{pose}'/>",
+           "<MoveGroupAction target_pose='{pose}' link_name='tool'/>",
+           "<MoveGroupAction group='arm' target_pose='{pose}' link_name='tool' "
+           "named_target='ready'/>",
+           "<MoveGroupAction goal='{goal}' target_pose='{pose}' link_name='tool'/>",
+           "<MoveGroupAction group='arm' target_pose='{pose}' link_name='tool' "
+           "position_tolerance='0'/>",
+           "<MoveGroupAction group='arm' target_pose='{pose}' link_name='tool' "
+           "orientation_tolerance='nan'/>",
+           "<MoveGroupAction group='arm' target_pose='{pose}' link_name='tool' "
+           "velocity_scaling='2'/>" }) {
+        auto invalid = tree(xml, bb);
+        EXPECT_EQ(invalid.tickOnce(), BT::NodeStatus::FAILURE);
+    }
+    for (int invalid_case = 0; invalid_case < 3; ++invalid_case) {
+        auto invalid_pose = pose;
+        if (invalid_case == 0) invalid_pose.header.frame_id.clear();
+        if (invalid_case == 1) invalid_pose.pose.orientation.x = 0;
+        if (invalid_case == 2)
+            invalid_pose.pose.position.x = std::numeric_limits<double>::quiet_NaN();
+        bb->set("pose", invalid_pose);
+        auto invalid =
+          tree("<MoveGroupAction group='arm' target_pose='{pose}' link_name='tool'/>", bb);
+        EXPECT_EQ(invalid.tickOnce(), BT::NodeStatus::FAILURE);
+    }
+    EXPECT_EQ(server.size(), 1u);
+}
+
+TEST_F(MotionActionsTest, TreeInputsRejectReservedNamesAndNestedValues)
+{
+    for (const auto &yaml : { "[]", "behaviour_goal: forbidden", "a: [1, 2]", "a: 1\na: 2" })
+        EXPECT_THROW(
+          std::make_shared<BddBtExecutor>(
+            rclcpp::NodeOptions().parameter_overrides({ rclcpp::Parameter("tree_inputs", yaml) })
+          ),
+          std::exception
+        );
 }

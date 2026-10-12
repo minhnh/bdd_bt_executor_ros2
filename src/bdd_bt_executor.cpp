@@ -34,6 +34,7 @@
 #include "bdd_bt_executor_ros2/nodes/planning_scene_objects.hpp"
 #include "bdd_bt_executor_ros2/nodes/resolve_behaviour_parameters.hpp"
 #include "bdd_bt_executor_ros2/nodes/motion_actions.hpp"
+#include "bdd_bt_executor_ros2/nodes/pose_operations.hpp"
 #include "bdd_bt_executor_ros2/nodes/publish_bdd_event.hpp"
 
 namespace bdd_bt_executor_ros2 {
@@ -42,7 +43,20 @@ BddBtExecutor::BddBtExecutor(const rclcpp::NodeOptions &options)
   : rclcpp::Node("bdd_bt_action_server", options), tick_rate_hz_(30)
 {
     declare_parameter<std::string>("robot_description_semantic", "");
-    tree_xml_              = declare_parameter<std::string>("tree_xml", "");
+    tree_xml_         = declare_parameter<std::string>("tree_xml", "");
+    const auto inputs = YAML::Load(declare_parameter<std::string>("tree_inputs", "{}"));
+    if (!inputs.IsMap())
+        throw std::invalid_argument("tree_inputs must be a YAML map of scalar values");
+    for (const auto &entry : inputs) {
+        const auto key = entry.first.as<std::string>();
+        if (
+          key.empty() || key == "behaviour_goal" || key == "behaviour_status"
+          || !entry.second.IsScalar()
+          || !tree_inputs_.emplace(key, entry.second.as<std::string>()).second
+        )
+            throw std::invalid_argument("invalid or duplicate tree_inputs entry");
+    }
+
     tick_rate_hz_          = declare_parameter<int>("tick_rate_hz", 30);
     const auto server_name = declare_parameter<std::string>("bhv_server_name", "bhv_server");
     const auto event_topic = declare_parameter<std::string>("event_topic", "/bdd/events");
@@ -143,6 +157,8 @@ void BddBtExecutor::execute_goal(const std::shared_ptr<GoalHandle> &goal_handle)
           }
         );
         factory.registerNodeType<BuildPlanningScene>("BuildPlanningScene");
+        factory.registerNodeType<SelectEntityPose>("SelectEntityPose");
+        factory.registerNodeType<OffsetPose>("OffsetPose");
         factory.registerBuilder<ClearPlanningSceneForUris>(
           "ClearPlanningSceneForUris",
           [node](const std::string &name, const BT::NodeConfig &config) {
@@ -154,6 +170,7 @@ void BddBtExecutor::execute_goal(const std::shared_ptr<GoalHandle> &goal_handle)
         if (register_nodes_) { register_nodes_(factory, node); }
 
         auto blackboard = BT::Blackboard::create();
+        for (const auto &[key, value] : tree_inputs_) blackboard->set(key, value);
         blackboard->set("behaviour_goal", goal_handle->get_goal());
         auto                tree = factory.createTreeFromFile(tree_xml_, blackboard);
         BT::Groot2Publisher groot_publisher(tree);

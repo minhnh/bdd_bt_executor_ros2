@@ -19,6 +19,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <map>
 #include <string>
 
 #include <bdd_ros2_interfaces/action/behaviour.hpp>
@@ -51,6 +52,7 @@ class BddBtExecutor : public rclcpp::Node
     RegisterNodes                                                 register_nodes_;
     std::atomic<bool>                                             tree_running_{ false };
     std::string                                                   tree_xml_;
+    std::map<std::string, std::string>                            tree_inputs_;
     int                                                           tick_rate_hz_;
 };
 

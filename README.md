@@ -7,13 +7,14 @@ The package provides the `bdd_bt_action_server` executable and these tree nodes:
 
 - `PublishBddEvent` publishes the current scenario context on the configured event topic.
 - `MockTimedAction` is a timed diagnostic action for integration tests and tree debugging.
-- `MoveGroupAction` sends a native MoveIt goal or resolves an SRDF named target.
+- `MoveGroupAction` sends native goals, SRDF named targets, or Cartesian pose targets to MoveIt.
 - `GripperCommandAction` sends a position/effort command to a gripper action server.
 - `ApplyPlanningScene` forwards a `moveit_msgs/PlanningScene` message to MoveIt and waits for acknowledgement.
 - `ClearPlanningSceneForUris`, `AttachObjectByUri`, and `DetachObjectByUri` construct
   URI-based cleanup, attachment, and detachment scene diffs.
 - `ResolveBehaviourParameters` maps incoming URI-valued goal parameters to configured tree roles.
 - `GetEntityPoses` collects URI-to-pose mappings; `BuildPlanningScene` builds primitive collision geometry.
+- `SelectEntityPose` selects a pose by URI; `OffsetPose` applies translation and rotation offsets.
 - `GetEntityPose` queries an entity pose through
   [ROS simulation interfaces](https://github.com/ros-simulation/simulation_interfaces).
 
@@ -67,6 +68,9 @@ ros2 run bdd_bt_executor_ros2 bdd_bt_action_server --ros-args \
 Parameters:
 
 - `tree_xml` (required): behavior-tree XML file loaded for each accepted goal.
+- `tree_inputs` (default `"{}"`): YAML map of scalar values copied to each new
+  root blackboard as strings. BT ports convert numbers and semicolon-separated
+  vectors to their native types. `behaviour_goal` and `behaviour_status` are reserved.
 - `tick_rate_hz` (default `30`): tree tick frequency.
 - `bhv_server_name` (default `bhv_server`): ROS action name.
 - `event_topic` (default `/bdd/events`): BDD event topic.

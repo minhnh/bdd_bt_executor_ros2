@@ -635,7 +635,7 @@ TEST_F(MotionActionsTest, PoseTargetBuildsConstraintsAndRejectsInvalidOrMixedInp
     auto t = tree(
       "<MoveGroupAction group='arm' target_pose='{pose}' link_name='tool' "
       "action_name='/test_move' position_tolerance='0.01' orientation_tolerance='0.1' "
-      "planning_time='3'/>",
+      "planning_time='3' plan_only='true'/>",
       bb
     );
     ASSERT_TRUE(wait([&]() {
@@ -647,7 +647,7 @@ TEST_F(MotionActionsTest, PoseTargetBuildsConstraintsAndRejectsInvalidOrMixedInp
     EXPECT_TRUE(goal.request.start_state.is_diff);
     EXPECT_DOUBLE_EQ(goal.request.allowed_planning_time, 3);
     EXPECT_DOUBLE_EQ(goal.request.max_velocity_scaling_factor, 0.2);
-    EXPECT_FALSE(goal.planning_options.plan_only);
+    EXPECT_TRUE(goal.planning_options.plan_only);
     EXPECT_TRUE(goal.planning_options.planning_scene_diff.is_diff);
     ASSERT_EQ(goal.request.goal_constraints.size(), 1u);
     const auto &constraint = goal.request.goal_constraints.front();

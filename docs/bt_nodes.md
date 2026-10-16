@@ -235,7 +235,9 @@ robot state and collision scene. Pose targets do not require an SRDF on the exec
   MoveIt handles the target frame; the node does not transform or offset the pose.
 - Pose tolerances: `position_tolerance="0.005"` (sphere radius, metres),
   `orientation_tolerance="0.05"` (per-axis radians), both finite and positive.
-- Named/pose planning options: `planning_time="5"`, `velocity_scaling="0.2"`,
+- `plan_only` (default `false`) for named & pose targets: if `true` plan without executing motion.
+  Native `goal` mode uses `goal.planning_options.plan_only` instead.
+- Planning options for named & pose targets: `planning_time="5"`, `velocity_scaling="0.2"`,
   `acceleration_scaling="0.2"`. Native goals retain their own options.
 - Optional: `action_name="/move_action"` and shared timing options.
 - Outputs: `error_code`, `feedback_state`, `status_message`.

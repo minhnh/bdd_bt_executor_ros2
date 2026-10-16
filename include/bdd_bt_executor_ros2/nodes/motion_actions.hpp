@@ -44,6 +44,7 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
         return { BT::InputPort<Action::Goal>("goal"),
                  BT::InputPort<std::string>("group"),
                  BT::InputPort<std::string>("named_target"),
+                 BT::InputPort<bool>("plan_only", false, "Plan named/pose goals without execution"),
                  BT::InputPort<geometry_msgs::msg::PoseStamped>("target_pose"),
                  BT::InputPort<std::string>("link_name"),
                  BT::InputPort<double>("position_tolerance", 0.005, "Position tolerance in metres"),
@@ -88,6 +89,10 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
             if (!readPoseGoal(goal, error)) return false;
         } else if (!getInput("goal", goal)) {
             error = "Invalid native goal";
+            return false;
+        }
+        if ((named || pose) && !getInput("plan_only", goal.planning_options.plan_only)) {
+            error = "Invalid plan_only option";
             return false;
         }
         const auto &request = goal.request;

@@ -3,7 +3,8 @@
 [Package overview](../README.md)
 
 Use `{key}` to read/write native blackboard values. Scene and pose outputs are
-valid after `SUCCESS`. Timeouts use steady time; keep ROS callbacks spinning.
+valid after `SUCCESS`. Timeouts use steady time except `WaitForMoveItReady`,
+which follows the node clock. Keep ROS callbacks spinning.
 
 ## Contents
 
@@ -21,6 +22,7 @@ valid after `SUCCESS`. Timeouts use steady time; keep ROS callbacks spinning.
     1. [SelectEntityPose](#selectentitypose)
     1. [OffsetPose](#offsetpose)
 1. [MoveIt Motion actions](#moveit-motion-actions)
+    1. [WaitForMoveItReady](#waitformoveitready)
     1. [MoveGroupAction](#movegroupaction)
     1. [GripperCommandAction](#grippercommandaction)
 1. [MoveIt planning scenes](#moveit-planning-scenes)
@@ -185,6 +187,35 @@ These nodes send ROS action goals for motion or gripper control.
 - Defaults: `timeout="30"` and `cancel_timeout="2"` (seconds).
 - Halt/timeout requests cancellation; physical stoppage is not guaranteed.
 
+### WaitForMoveItReady
+
+Wait for a MoveGroup server, fresh joint positions, and end-effector TF before starting motion.
+No action goal is sent.
+
+```xml
+<WaitForMoveItReady action_name="/move_action" joint_states_topic="/joint_states"
+                   group="arm" target_frame="world"
+                   end_effector_frame="tool" max_age="1.0" timeout="30.0"/>
+```
+
+- Required: `group`, `target_frame`, `end_effector_frame`.
+- Reads active scalar joints from `robot_description` (URDF) and
+  `robot_description_semantic` (SRDF), the same semantic parameter used for named targets.
+  Fixed and mimic joints are excluded; chains and subgroups are resolved by MoveIt.
+- Defaults: `action_name=/move_action`, `joint_states_topic=/joint_states`,
+  `max_age=1.0`, `timeout=30.0` seconds; ages/timeouts must be finite and positive.
+- Returns `RUNNING` until ready, `SUCCESS` when all checks pass, or `FAILURE`
+  on timeout/invalid inputs. `status_message` and Behaviour feedback identify the
+  missing requirement. Halt releases subscriptions, TF listener, and client.
+- Joint positions must be finite. Joint/TF source stamps must be nonzero, at or
+  after wait start, and no older than `max_age`; joint messages must arrive during
+  this activation. The node clock controls freshness and timeout, including pause.
+  A backward jump discards prior samples and restarts the timeout on the new timeline.
+- This detects readiness after startup/reset, including
+  [ros2_control #3697](https://github.com/ros-controls/ros2_control/issues/3697).
+  It cannot shorten the old sleep deadline. Availability and fresh state do not
+  guarantee that a particular motion can be planned or executed.
+
 ### MoveGroupAction
 
 Sends target constraints to MoveIt, which plans and executes using its current
@@ -198,7 +229,7 @@ robot state and collision scene. Pose targets do not require an SRDF on the exec
 
 - Required: exactly one input mode:
   - Native `moveit_msgs::action::MoveGroup::Goal` `goal`.
-  - `group` + `named_target` (requires `robot_description_semantic` on the executor).
+  - `group` + `named_target` (requires `robot_description` and `robot_description_semantic` on the executor).
   - `group` + `target_pose` (`PoseStamped`) + `link_name` (the constrained robot link).
 - Pose targets require a nonempty frame and a finite pose with a unit quaternion.
   MoveIt handles the target frame; the node does not transform or offset the pose.

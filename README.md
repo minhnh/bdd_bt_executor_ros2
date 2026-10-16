@@ -7,6 +7,9 @@ The package provides the `bdd_bt_action_server` executable and these tree nodes:
 
 - `PublishBddEvent` publishes the current scenario context on the configured event topic.
 - `MockTimedAction` is a timed diagnostic action for integration tests and tree debugging.
+- `WaitForMoveItReady` waits for the MoveGroup action servers to be ready. This is needed to
+  handle [clock reset issue](https://github.com/ros-controls/ros2_control/issues/3697)
+  when loading scene variations into simulation.
 - `MoveGroupAction` sends native goals, SRDF named targets, or Cartesian pose targets to MoveIt.
 - `GripperCommandAction` sends a position/effort command to a gripper action server.
 - `ApplyPlanningScene` forwards a `moveit_msgs/PlanningScene` message to MoveIt and waits for acknowledgement.
@@ -54,7 +57,8 @@ applications can also embed the exported C++ class and register custom nodes.
 - **Events:** trees explicitly publish BDD boundaries with `PublishBddEvent`;
   the executor does not infer boundary events from motion completion.
 - **Dependencies:** MoveIt and simulation servers are needed only by trees that
-  invoke their respective nodes. SRDF is required only for named-target goals.
+  invoke their respective nodes. URDF and SRDF are required for
+  named-target goals and readiness checks.
 
 Run the server:
 
@@ -74,7 +78,8 @@ Parameters:
 - `tick_rate_hz` (default `30`): tree tick frequency.
 - `bhv_server_name` (default `bhv_server`): ROS action name.
 - `event_topic` (default `/bdd/events`): BDD event topic.
-- `robot_description_semantic` (default empty): SRDF XML required for named targets.
+- `robot_description` (default empty): URDF XML for named targets and readiness.
+- `robot_description_semantic` (default empty): SRDF XML for named targets and readiness.
 
 ### Extend `BddBtExecutor` with custom nodes
 
@@ -159,7 +164,7 @@ Execution and configuration:
 - Each move starts from the current state, with 20% velocity/acceleration scaling.
 - [behavior_trees/named_goals.xml](behavior_trees/named_goals.xml) specifies the
   sequence, planning group, targets, action endpoint, and 60-second timeout per move.
-- Override `tree_xml`, `srdf`, or `behaviour_action` in the launch command.
+- Override `tree_xml`, `urdf`, `srdf`, or `behaviour_action` in the launch command.
 - Each timeout covers discovery, planning, and execution using steady time.
 - Gripper commands use `/panda_hand_controller/gripper_cmd`: `0.0` closes
   each finger and `0.04` opens each finger (meters).

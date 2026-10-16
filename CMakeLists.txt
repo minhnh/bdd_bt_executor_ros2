@@ -11,11 +11,11 @@ find_package(bdd_ros2_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(moveit_msgs REQUIRED)
+find_package(moveit_ros_planning REQUIRED)
 find_package(control_msgs REQUIRED)
 find_package(simulation_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(tinyxml2_vendor REQUIRED)
-find_package(TinyXML2 REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(yaml_cpp_vendor REQUIRED)
@@ -32,13 +32,15 @@ ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   rclcpp_action
   moveit_msgs
+  moveit_ros_planning
   control_msgs
   simulation_interfaces
   geometry_msgs
+  sensor_msgs
   tf2_ros
   tf2_geometry_msgs)
 
-target_link_libraries(${PROJECT_NAME} tinyxml2::tinyxml2 yaml-cpp)
+target_link_libraries(${PROJECT_NAME} yaml-cpp)
 
 add_executable(bdd_bt_action_server src/main.cpp)
 target_link_libraries(bdd_bt_action_server ${PROJECT_NAME})
@@ -58,11 +60,11 @@ ament_export_dependencies(
   rclcpp
   rclcpp_action
   moveit_msgs
+  moveit_ros_planning
   control_msgs
   simulation_interfaces
   geometry_msgs
-  tinyxml2_vendor
-  TinyXML2
+  sensor_msgs
   tf2_ros
   tf2_geometry_msgs
   yaml_cpp_vendor
@@ -75,6 +77,8 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_bt_nodes test/test_bt_nodes.cpp)
   target_link_libraries(test_bt_nodes ${PROJECT_NAME})
+  ament_add_gtest(test_moveit_readiness test/test_moveit_readiness.cpp)
+  target_link_libraries(test_moveit_readiness ${PROJECT_NAME})
   ament_add_gtest(test_motion_actions test/test_motion_actions.cpp)
   target_link_libraries(test_motion_actions ${PROJECT_NAME})
   target_compile_definitions(test_motion_actions PRIVATE

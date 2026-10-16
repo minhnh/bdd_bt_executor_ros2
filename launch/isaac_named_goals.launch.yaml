@@ -8,6 +8,9 @@ launch:
       name: srdf
       default: '$(find-pkg-share moveit_resources_panda_moveit_config)/config/panda.srdf'
   - arg:
+      name: urdf
+      default: '$(find-pkg-share moveit_resources_panda_description)/urdf/panda.urdf'
+  - arg:
       name: tree_xml
       default: '$(find-pkg-share bdd_bt_executor_ros2)/behavior_trees/named_goals.xml'
   - arg:
@@ -28,6 +31,9 @@ launch:
           value: '$(var behaviour_action)'
         - name: tree_xml
           value: '$(var tree_xml)'
+        - name: robot_description
+          value: '$(file-content $(var urdf))'
+          type: str
         - name: robot_description_semantic
           value: '$(file-content $(var srdf))'
           type: str

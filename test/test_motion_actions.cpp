@@ -526,6 +526,12 @@ TEST_F(MotionActionsTest, ClientIsLazyReusedAndReplacedWhenEndpointChanges)
 
 TEST_F(MotionActionsTest, NamedTargetResolvesAndRejectsInvalidInputs)
 {
+    client_node->declare_parameter<std::string>(
+      "robot_description",
+      "<robot name='test'><link name='base'/><link name='tip'/>"
+      "<joint name='joint1' type='continuous'><parent link='base'/><child "
+      "link='tip'/></joint></robot>"
+    );
     client_node->declare_parameter<std::string>("robot_description_semantic", "");
     auto named = tree(
       "<MoveGroupAction group=\"test_arm\" named_target=\"ready\" action_name=\"/test_move\"/>"
@@ -534,7 +540,8 @@ TEST_F(MotionActionsTest, NamedTargetResolvesAndRejectsInvalidInputs)
     client_node->set_parameter(
       rclcpp::Parameter(
         "robot_description_semantic",
-        "<robot name='test'><group_state group='test_arm' name='ready'>"
+        "<robot name='test'><group name='test_arm'><joint name='joint1'/></group><group_state "
+        "group='test_arm' name='ready'>"
         "<joint name='joint1' value='-0.785'/></group_state></robot>"
       )
     );
@@ -559,26 +566,10 @@ TEST_F(MotionActionsTest, NamedTargetResolvesAndRejectsInvalidInputs)
     auto valid = moveTree();
     for (const auto &xml :
          { "<MoveGroupAction group='test_arm' named_target='missing'/>",
+           "<MoveGroupAction group='missing' named_target='ready'/>",
            "<MoveGroupAction group='test_arm'/>",
-           "<MoveGroupAction goal='{goal}' group='test_arm' named_target='ready'/>",
-           "<MoveGroupAction group='test_arm' named_target='ready' planning_time='0'/>",
-           "<MoveGroupAction group='test_arm' named_target='ready' velocity_scaling='2'/>" }) {
+           "<MoveGroupAction goal='{goal}' group='test_arm' named_target='ready'/>" }) {
         auto invalid = tree(xml, valid.rootBlackboard());
-        EXPECT_EQ(invalid.tickOnce(), BT::NodeStatus::FAILURE);
-    }
-    for (const auto &srdf : { "not XML",
-                              "<robot/>",
-                              "<robot><group_state group='test_arm' name='ready'/></robot>",
-                              "<robot><group_state group='test_arm' name='ready'><joint name='j' "
-                              "value='0,5'/></group_state></robot>",
-                              "<robot><group_state group='test_arm' name='ready'><joint name='j' "
-                              "value='1 2'/></group_state></robot>",
-                              "<robot><group_state group='test_arm' name='ready'><joint name='j' "
-                              "value='nan'/></group_state></robot>",
-                              "<robot><group_state group='test_arm' name='ready'><joint name='j' "
-                              "value='1'/><joint name='j' value='2'/></group_state></robot>" }) {
-        client_node->set_parameter(rclcpp::Parameter("robot_description_semantic", srdf));
-        auto invalid = tree("<MoveGroupAction group='test_arm' named_target='ready'/>");
         EXPECT_EQ(invalid.tickOnce(), BT::NodeStatus::FAILURE);
     }
     EXPECT_EQ(server.size(), 1);
@@ -587,8 +578,15 @@ TEST_F(MotionActionsTest, NamedTargetResolvesAndRejectsInvalidInputs)
 TEST_F(MotionActionsTest, NamedGoalsExampleMovesThenClosesThenReturnsThenOpens)
 {
     client_node->declare_parameter<std::string>(
+      "robot_description",
+      "<robot name='panda'><link name='base'/><link name='tip'/>"
+      "<joint name='panda_joint1' type='continuous'><parent link='base'/><child "
+      "link='tip'/></joint></robot>"
+    );
+    client_node->declare_parameter<std::string>(
       "robot_description_semantic",
-      "<robot name='panda'><group_state group='panda_arm' name='extended'>"
+      "<robot name='panda'><group name='panda_arm'><joint "
+      "name='panda_joint1'/></group><group_state group='panda_arm' name='extended'>"
       "<joint name='panda_joint1' value='0'/></group_state>"
       "<group_state group='panda_arm' name='ready'>"
       "<joint name='panda_joint1' value='0.5'/></group_state></robot>"

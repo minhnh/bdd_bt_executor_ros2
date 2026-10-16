@@ -15,16 +15,14 @@
 #pragma once
 
 #include <cmath>
+#include <map>
 #include <string>
-#include <sstream>
-#include <locale>
-#include <set>
-#include <tinyxml2.h>
 #include <utility>
 
 #include <control_msgs/action/gripper_command.hpp>
 #include <moveit_msgs/action/move_group.hpp>
 
+#include "bdd_bt_executor_ros2/robot_model.hpp"
 #include "bdd_bt_executor_ros2/nodes/ros_action.hpp"
 #include "bdd_bt_executor_ros2/nodes/get_entity_poses.hpp"
 
@@ -112,7 +110,7 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
 
     bool readNamedGoal(Action::Goal &goal, std::string &error)
     {
-        std::string group, target, srdf;
+        std::string group, target;
         if (
           !getInput("group", group) || group.empty() || !getInput("named_target", target)
           || target.empty()
@@ -120,35 +118,14 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
             error = "Named target requires nonempty group and named_target";
             return false;
         }
-        if (!node_->get_parameter("robot_description_semantic", srdf) || srdf.empty()) {
-            error = "Named target requires robot_description_semantic on the executor";
-            return false;
-        }
-        tinyxml2::XMLDocument document;
+        const auto                    model       = loadRobotModel(node_);
+        const auto                    joint_group = model->getJointModelGroup(group);
+        std::map<std::string, double> positions;
         if (
-          document.Parse(srdf.c_str()) != tinyxml2::XML_SUCCESS
-          || !document.FirstChildElement("robot")
+          !joint_group || !joint_group->getVariableDefaultPositions(target, positions)
+          || positions.empty()
         ) {
-            error = "Invalid robot_description_semantic XML";
-            return false;
-        }
-        const tinyxml2::XMLElement *selected = nullptr;
-        for (auto state = document.FirstChildElement("robot")->FirstChildElement("group_state");
-             state;
-             state = state->NextSiblingElement("group_state")) {
-            if (
-              state->Attribute("group") && state->Attribute("name")
-              && group == state->Attribute("group") && target == state->Attribute("name")
-            ) {
-                if (selected) {
-                    error = "Duplicate named target in SRDF";
-                    return false;
-                }
-                selected = state;
-            }
-        }
-        if (!selected) {
-            error = "Unknown named target: " + group + "/" + target;
+            error = "Unknown or empty named target: " + group + "/" + target;
             return false;
         }
         goal                               = Action::Goal();
@@ -165,30 +142,18 @@ class MoveGroupAction : public RosAction<moveit_msgs::action::MoveGroup>
         }
         moveit_msgs::msg::Constraints constraints;
         constraints.name = target;
-        std::set<std::string> joints;
-        for (auto joint = selected->FirstChildElement("joint"); joint;
-             joint      = joint->NextSiblingElement("joint")) {
-            const auto                        name  = joint->Attribute("name");
-            const auto                        value = joint->Attribute("value");
-            moveit_msgs::msg::JointConstraint constraint;
-            // SRDF decimals always use a dot, independently of the process locale.
-            std::istringstream input(value ? value : "");
-            input.imbue(std::locale::classic());
-            if (
-              !name || !*name || !joints.insert(name).second || !(input >> constraint.position)
-              || !std::isfinite(constraint.position) || !(input >> std::ws).eof()
-            ) {
-                error = "Named targets require unique joints with one finite scalar position";
+        for (const auto &[name, position] : positions) {
+            const auto *joint = model->getJointOfVariable(name);
+            if (!joint || joint->getVariableCount() != 1 || !std::isfinite(position)) {
+                error = "Named targets require finite scalar joint positions";
                 return false;
             }
-            constraint.joint_name      = name;
+            moveit_msgs::msg::JointConstraint constraint;
+            constraint.joint_name      = joint->getName();
+            constraint.position        = position;
             constraint.tolerance_above = constraint.tolerance_below = 0.001;
             constraint.weight                                       = 1.0;
             constraints.joint_constraints.push_back(constraint);
-        }
-        if (constraints.joint_constraints.empty()) {
-            error = "Empty named target";
-            return false;
         }
         goal.request.goal_constraints.push_back(constraints);
         goal.planning_options.planning_scene_diff.is_diff             = true;

@@ -13,10 +13,11 @@
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
   <depend>moveit_msgs</depend>
+  <depend>moveit_ros_planning</depend>
   <depend>control_msgs</depend>
   <depend>simulation_interfaces</depend>
   <depend>geometry_msgs</depend>
-  <depend>tinyxml2_vendor</depend>
+  <depend>sensor_msgs</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>yaml_cpp_vendor</depend>

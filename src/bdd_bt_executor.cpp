@@ -34,6 +34,7 @@
 #include "bdd_bt_executor_ros2/nodes/planning_scene_objects.hpp"
 #include "bdd_bt_executor_ros2/nodes/resolve_behaviour_parameters.hpp"
 #include "bdd_bt_executor_ros2/nodes/motion_actions.hpp"
+#include "bdd_bt_executor_ros2/nodes/wait_for_moveit_ready.hpp"
 #include "bdd_bt_executor_ros2/nodes/pose_operations.hpp"
 #include "bdd_bt_executor_ros2/nodes/publish_bdd_event.hpp"
 
@@ -42,6 +43,7 @@ namespace bdd_bt_executor_ros2 {
 BddBtExecutor::BddBtExecutor(const rclcpp::NodeOptions &options)
   : rclcpp::Node("bdd_bt_action_server", options), tick_rate_hz_(30)
 {
+    declare_parameter<std::string>("robot_description", "");
     declare_parameter<std::string>("robot_description_semantic", "");
     tree_xml_         = declare_parameter<std::string>("tree_xml", "");
     const auto inputs = YAML::Load(declare_parameter<std::string>("tree_inputs", "{}"));
@@ -129,6 +131,11 @@ void BddBtExecutor::execute_goal(const std::shared_ptr<GoalHandle> &goal_handle)
           [node, publisher = event_publisher_, context_id](
             const std::string &name, const BT::NodeConfig &config
           ) { return std::make_unique<PublishBddEvent>(name, config, node, publisher, context_id); }
+        );
+        factory.registerBuilder<WaitForMoveItReady>(
+          "WaitForMoveItReady", [node](const std::string &name, const BT::NodeConfig &config) {
+              return std::make_unique<WaitForMoveItReady>(name, config, node);
+          }
         );
         factory.registerBuilder<MoveGroupAction>(
           "MoveGroupAction", [node](const std::string &name, const BT::NodeConfig &config) {
